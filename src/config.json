@@ -1,6 +1,6 @@
 {
   "taskVersion": "1.0.0",
-  "taskName": "visualQualifying",
+  "taskName": "visual_qualifying",
   "debug": false,
   "awsLambda": {
     "saveTaskData": {
