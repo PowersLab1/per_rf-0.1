@@ -1,5 +1,7 @@
 import React, {Component} from 'react';
 import {aws_saveTaskData, aws_fetchLink} from "../lib/aws_lambda";
+import {isLocalhost} from "../lib/utils";
+
 import '../lib/external/lab.css';
 import './LabJsWrapper.css';
 
@@ -14,45 +16,70 @@ class LabJsWrapper extends Component {
   constructor(props) {
     super(props);
 
+    // Parse get params for encrypted metadata
     const params = qs.parse(
       this.props.location.search,
       {ignoreQueryPrefix: true}
     );
 
+    // Set init state
     this.state = {
       encryptedMetadata: params.id,
       sendingData: false,
       link: undefined,
     };
-    console.log(this.state.encryptedMetadata);
+
     if (!_.isUndefined(this.state.encryptedMetadata)) {
       this.addScript(process.env.PUBLIC_URL + '/external/lab.js', () => {
-          this.addScript(process.env.PUBLIC_URL + '/script.js');
+        // If we add this script tag before lab.js loads, then the
+        // script will not be able to find the lab module.
+        this.addScript(process.env.PUBLIC_URL + '/script.js');
       });
     }
+  }
+
+  // labJsData should be parsed
+  packageDataForExport(labJsData) {
+    const exportData = {};
+
+    exportData.encrypted_metadata = this.state.encryptedMetadata;
+    exportData.taskName = config.taskName;
+    exportData.taskVersion = config.taskVersion;
+    exportData.data = this.processLabJsData(labJsData);
+
+    return JSON.stringify(exportData);
+  }
+
+  processLabJsData(labJsData) {
+    const processedData = [];
+
+    // Always keep entry 0 of labjs data since it contains useful metadata
+    processedData.push(labJsData[0]);
+
+    // Do other processing here
+    // processedData.push(...);
+
+    return processedData;
   }
 
   componentDidMount() {
     var that = this;
     window.addEventListener('message', function(event) {
       if (event.data.type === 'labjs.data') {
-        const data = JSON.parse(event.data.json);
+        const parsedData = JSON.parse(event.data.json);
 
-        if (config.debug) {
-          console.log(data);
+        // Print out debugging info if flag is set or we're on localhost
+        if (config.debug || isLocalhost) {
+          console.log(parsedData);
+        }
+
+        // If localhost, we're done at this point
+        if (isLocalhost) {
           return;
         }
 
-        // Package data
-        const exportData = {};
-
-        exportData.encrypted_metadata = that.state.encryptedMetadata;
-        exportData.taskName = config.taskName;
-        exportData.taskVersion = config.taskVersion;
-        exportData.data = data;
-
         that.setState({sendingData: true});
-        aws_saveTaskData(that.state.encryptedMetadata, JSON.stringify(exportData)).then(
+        aws_saveTaskData(that.state.encryptedMetadata, that.packageDataForExport(parsedData)).then(
           () => {
             console.log("Saved task data");
             aws_fetchLink(that.state.encryptedMetadata).then(
@@ -101,7 +128,6 @@ class LabJsWrapper extends Component {
         </div>
       </div>
     );
-
   } // end render
 } // end class
 
