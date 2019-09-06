@@ -22,6 +22,8 @@ class LabJsWrapper extends Component {
       {ignoreQueryPrefix: true}
     );
 
+    this.surveyUrl = params.survey_url;
+
     // Set init state
     this.state = {
       encryptedMetadata: params.id,
@@ -71,20 +73,27 @@ class LabJsWrapper extends Component {
         // Print out debugging info if flag is set or we're on localhost
         if (config.debug || isLocalhost) {
           console.log(parsedData);
+          console.log(that.processLabJsData(parsedData));
         }
 
         // If localhost, we're done at this point
         if (isLocalhost) {
+          if (that.surveyUrl) {
+            that.setState({link: that.surveyUrl});
+          }
           return;
         }
 
         that.setState({sendingData: true});
         aws_saveTaskData(that.state.encryptedMetadata, that.packageDataForExport(parsedData)).then(
           () => {
-            console.log("Saved task data");
-            aws_fetchLink(that.state.encryptedMetadata).then(
-              (link) => that.setState({link: link})
-            );
+            if (that.surveyUrl) {
+              that.setState({link: that.surveyUrl});
+            } else {
+              aws_fetchLink(that.state.encryptedMetadata).then(
+                (link) => that.setState({link: link})
+              );
+            }
           }
         );
       }
